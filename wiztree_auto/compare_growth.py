@@ -537,7 +537,19 @@ def render_growth_html(report: GrowthReport, selection: ComparisonSelection) -> 
       align-items: flex-start;
       gap: 8px;
       min-width: 0;
-      padding-left: calc(10px + (var(--depth) * 18px));
+      padding-left: 12px;
+    }}
+    .depth-guides {{
+      display: inline-flex;
+      align-items: stretch;
+      gap: 10px;
+      flex: 0 0 auto;
+      padding-top: 2px;
+    }}
+    .guide {{
+      width: 6px;
+      min-height: 22px;
+      border-left: 1px solid rgba(163, 146, 114, 0.75);
     }}
     .row-toggle, .row-toggle-spacer {{
       width: 22px;
@@ -558,14 +570,6 @@ def render_growth_html(report: GrowthReport, selection: ComparisonSelection) -> 
     .row-toggle-spacer {{ display: inline-block; }}
     .name-block {{ min-width: 0; }}
     .name-text {{ font-weight: 700; }}
-    .full-path {{
-      display: block;
-      margin-top: 3px;
-      font-family: var(--mono);
-      font-size: 11px;
-      color: var(--muted);
-      word-break: break-all;
-    }}
     .badge {{
       display: inline-block;
       margin-left: 8px;
@@ -771,6 +775,7 @@ def render_tree_table_row(node: GrowthTreeNode, parent_path: str, expanded: bool
     else:
         toggle = '<span class="row-toggle-spacer"></span>'
 
+    guides = "".join('<span class="guide"></span>' for _ in range(node.depth))
     files_text = f"{node.files:,}" if node.files else "-"
     folders_text = f"{node.folders:,}" if node.folders else "-"
     return (
@@ -778,8 +783,7 @@ def render_tree_table_row(node: GrowthTreeNode, parent_path: str, expanded: bool
         f'data-parent="{html.escape(parent_path)}" data-depth="{node.depth}" '
         f'data-expanded="{str(expanded).lower()}" data-has-children="{str(bool(node.children)).lower()}" '
         f'style="--depth:{node.depth};">'
-        f'<div class="path-cell">{toggle}<div class="name-block"><span class="name-text">{html.escape(node.name)}</span>{"".join(badges)}'
-        f'<span class="full-path">{html.escape(node.path)}</span></div></div>'
+        f'<div class="path-cell" title="{html.escape(node.path)}"><span class="depth-guides">{guides}</span>{toggle}<div class="name-block"><span class="name-text">{html.escape(node.name)}</span>{"".join(badges)}</div></div>'
         f'<div class="cell-metric cell-growth"><strong>{html.escape(format_bytes(node.growth_allocated, signed=True))}</strong></div>'
         f'<div class="cell-metric"><strong>{html.escape(format_bytes(node.current_allocated))}</strong></div>'
         f'<div class="cell-metric"><strong>{html.escape(format_bytes(node.baseline_allocated))}</strong></div>'
@@ -787,6 +791,7 @@ def render_tree_table_row(node: GrowthTreeNode, parent_path: str, expanded: bool
         f'<div class="cell-metric"><strong>{folders_text}</strong></div>'
         '</div>'
     )
+
 
 def format_bytes(value: int, signed: bool = False) -> str:
     negative = value < 0
@@ -825,6 +830,8 @@ def folder_name(path: str) -> str:
 
 def is_drive_root_path(path: str) -> bool:
     return len(path) == 3 and path[1:] == ":\\"
+
+
 
 
 
