@@ -66,6 +66,45 @@ powershell -ExecutionPolicy Bypass -File .\scripts\run_daily.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\run_daily.ps1 -Force
 ```
 
+## 文件夹增长对比
+
+新增脚本：`scripts/compare_growth.py`
+
+用途：基于两份 WizTree 原始 CSV，对比全盘文件夹增长量，并生成树状 HTML 报告与平面 CSV 排行。
+
+默认行为：
+
+- 默认比较当前盘符下“最近两份”原始快照
+- 使用 `--since YYYY-MM-DD` 时，基线快照取“该日期及之后的第一份快照”
+- 最新快照默认取当前盘符下最新的一份原始快照
+- 报告仅展示“增长量大于 0”或“新增”的文件夹
+- 新增文件夹的增长量等于当前 `allocated_bytes`
+- 树状视图会自动补上祖先目录，按最大可见增长排序，避免全量平铺
+
+常用命令：
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\compare_growth.py --since 2026-03-01 --drive C:
+```
+
+显式指定两份原始 CSV：
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\compare_growth.py --baseline-csv .\data\raw\c\2026\03\wiztree_c_20260301_120000.csv --latest-csv .\data\raw\c\2026\03\wiztree_c_20260306_120000.csv
+```
+
+生成结果：
+
+- `data/reports/c_growth_<baseline>_to_<latest>.html`
+- `data/reports/c_growth_<baseline>_to_<latest>.csv`
+
+HTML 报告内容：
+
+- 全盘增长摘要
+- 增长文件夹平面排行
+- 新增文件夹排行
+- 类似 WizTree 的可折叠树状视图
+
 ## 输出目录
 
 所有输出都写入 `data/`：
@@ -140,7 +179,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\register_task.ps1
 - 历史 CSV 输出
 - 同日幂等跳过
 - 热点路径趋势缺失补零
-- 图表文件生成
+- 图表文件生成`r`n- 原始快照增长对比与树状 HTML 报告生成
 
 ## 实现说明
 
@@ -184,3 +223,5 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\register_task.ps1
 - 增加邮件或通知
 - 增加 HTML 报表
 - 将历史数据导入 SQLite 或 DuckDB
+
+
