@@ -1,0 +1,14 @@
+{
+  "scan_targets": [
+    "C:"
+  ],
+  "schedule_time": "12:00",
+  "catch_up": true,
+  "run_level": "highest",
+  "top_path_mode": "deep_hot_paths",
+  "top_n": 20,
+  "chart_window_days": 30,
+  "output_root": "D:\\hang\\workspace\\wiztree-auto\\data",
+  "task_name": "WizTree-Daily-C",
+  "wiztree_path": "C:\\Program Files\\WizTree\\WizTree64.exe"
+}
