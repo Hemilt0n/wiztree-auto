@@ -412,7 +412,7 @@ def write_flat_growth_csv(path: Path, entries: list[FolderGrowth]) -> None:
 def render_growth_html(report: GrowthReport, selection: ComparisonSelection) -> str:
     top_entries = report.direct_growth_entries[:30]
     new_entries = [entry for entry in report.direct_growth_entries if entry.is_new][:30]
-    tree_html = "".join(render_tree_node(node) for node in report.root_node.children)
+    tree_rows_html = render_tree_table_rows(report.root_node)
     top_rows_html = "".join(render_flat_table_row(entry) for entry in top_entries)
     new_rows_html = "".join(render_flat_table_row(entry) for entry in new_entries)
 
@@ -424,17 +424,23 @@ def render_growth_html(report: GrowthReport, selection: ComparisonSelection) -> 
   <title>{html.escape(report.drive)} 文件夹增长报告</title>
   <style>
     :root {{
-      --bg: #f4efe6;
-      --panel: rgba(255,255,255,0.88);
-      --ink: #1e1d1a;
+      --bg-top: #f8f2e8;
+      --bg-bottom: #ece6dc;
+      --panel: rgba(255,255,255,0.92);
+      --panel-strong: rgba(255,255,255,0.97);
+      --ink: #161411;
       --muted: #6b655c;
-      --line: #d7cdbd;
+      --line: #d9d0c2;
+      --line-strong: #c3b8a5;
       --rise: #a23b1e;
-      --new: #1c6b48;
-      --chip: #ece1d0;
-      --shadow: 0 18px 50px rgba(68, 49, 18, 0.12);
+      --new: #1d6a48;
+      --group: #5a6a84;
+      --shadow: 0 22px 60px rgba(78, 56, 18, 0.12);
       --mono: Consolas, 'Cascadia Mono', 'SFMono-Regular', monospace;
       --sans: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+      --row-hover: rgba(232, 220, 194, 0.45);
+      --row-alt: rgba(247, 241, 232, 0.75);
+      --tree-bg: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(248,244,238,0.92));
     }}
     * {{ box-sizing: border-box; }}
     body {{
@@ -442,54 +448,154 @@ def render_growth_html(report: GrowthReport, selection: ComparisonSelection) -> 
       font-family: var(--sans);
       color: var(--ink);
       background:
-        radial-gradient(circle at top left, rgba(216,175,95,0.28), transparent 28%),
-        linear-gradient(180deg, #f7f1e8 0%, #efe8dc 100%);
+        radial-gradient(circle at top left, rgba(226, 180, 85, 0.25), transparent 24%),
+        linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
     }}
-    .page {{ max-width: 1440px; margin: 0 auto; padding: 32px 24px 48px; }}
-    h1, h2 {{ margin: 0; font-weight: 700; }}
-    h1 {{ font-size: 34px; letter-spacing: 0.02em; }}
-    h2 {{ font-size: 20px; margin-bottom: 14px; }}
+    .page {{ max-width: 1520px; margin: 0 auto; padding: 28px 24px 48px; }}
+    .hero {{ display: grid; gap: 14px; margin-bottom: 22px; }}
+    h1 {{ margin: 0; font-size: 34px; letter-spacing: 0.02em; }}
     p {{ margin: 0; color: var(--muted); }}
-    .hero {{ display: grid; gap: 16px; margin-bottom: 24px; }}
-    .meta {{ font-family: var(--mono); font-size: 13px; color: var(--muted); display: grid; gap: 4px; }}
-    .cards {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin: 22px 0 28px; }}
-    .card, .panel {{ background: var(--panel); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); }}
-    .card {{ padding: 18px 18px 16px; }}
-    .card .label {{ font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }}
-    .card .value {{ display: block; font-size: 28px; margin-top: 8px; font-weight: 700; }}
-    .card .sub {{ display: block; margin-top: 8px; font-family: var(--mono); font-size: 12px; color: var(--muted); }}
-    .grid {{ display: grid; grid-template-columns: minmax(320px, 0.95fr) minmax(440px, 1.4fr); gap: 20px; align-items: start; }}
-    .panel {{ padding: 18px; overflow: hidden; }}
-    .table-wrap {{ overflow: auto; max-height: 420px; border-radius: 12px; border: 1px solid var(--line); }}
+    .meta {{ display: grid; gap: 4px; font-family: var(--mono); font-size: 12px; color: var(--muted); }}
+    .stats {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }}
+    .stat {{
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }}
+    .stat-label {{ font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }}
+    .stat-value {{ display: block; margin-top: 6px; font-size: 26px; font-weight: 700; }}
+    .stat-sub {{ display: block; margin-top: 6px; font-family: var(--mono); font-size: 12px; color: var(--muted); }}
+    .panel {{
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }}
+    .panel-header {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 18px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(247,242,233,0.95));
+      border-bottom: 1px solid var(--line);
+    }}
+    .panel-header h2 {{ margin: 0; font-size: 20px; }}
+    .panel-header p {{ font-size: 13px; }}
+    .toolbar {{ display: flex; gap: 8px; flex-wrap: wrap; }}
+    button {{
+      border: 1px solid var(--line-strong);
+      background: #fbf7f1;
+      border-radius: 999px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font: inherit;
+      color: var(--ink);
+    }}
+    button:hover {{ background: #f2eadf; }}
+    .tree-shell {{ background: var(--tree-bg); }}
+    .tree-head, .tree-row {{
+      display: grid;
+      grid-template-columns: minmax(460px, 1.9fr) 140px 140px 140px 110px 110px;
+      align-items: stretch;
+    }}
+    .tree-head {{
+      position: sticky;
+      top: 0;
+      z-index: 4;
+      background: #efe6d8;
+      border-bottom: 1px solid var(--line-strong);
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }}
+    .tree-head > div, .tree-row > div {{ padding: 10px 12px; border-right: 1px solid rgba(195,184,165,0.45); }}
+    .tree-head > div:last-child, .tree-row > div:last-child {{ border-right: none; }}
+    .tree-scroll {{ max-height: 760px; overflow: auto; }}
+    .tree-row {{
+      border-bottom: 1px solid rgba(217,208,194,0.6);
+      background: rgba(255,255,255,0.66);
+      font-size: 13px;
+    }}
+    .tree-row:nth-child(even) {{ background: var(--row-alt); }}
+    .tree-row:hover {{ background: var(--row-hover); }}
+    .tree-row.hidden {{ display: none; }}
+    .tree-row.root {{ background: rgba(232,221,198,0.88); font-weight: 700; }}
+    .tree-row.group-row .name-text {{ color: #314361; }}
+    .tree-row.new-row .name-text {{ color: var(--new); }}
+    .path-cell {{
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      min-width: 0;
+      padding-left: calc(10px + (var(--depth) * 18px));
+    }}
+    .row-toggle, .row-toggle-spacer {{
+      width: 22px;
+      height: 22px;
+      flex: 0 0 22px;
+      margin-top: 1px;
+      border-radius: 6px;
+    }}
+    .row-toggle {{
+      border: 1px solid transparent;
+      background: transparent;
+      padding: 0;
+      font-family: var(--mono);
+      font-size: 14px;
+      color: #3a3123;
+    }}
+    .row-toggle:hover {{ border-color: var(--line); background: rgba(255,255,255,0.85); }}
+    .row-toggle-spacer {{ display: inline-block; }}
+    .name-block {{ min-width: 0; }}
+    .name-text {{ font-weight: 700; }}
+    .full-path {{
+      display: block;
+      margin-top: 3px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      word-break: break-all;
+    }}
+    .badge {{
+      display: inline-block;
+      margin-left: 8px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      vertical-align: middle;
+    }}
+    .badge.new {{ background: rgba(29,106,72,0.12); color: var(--new); }}
+    .badge.group {{ background: rgba(90,106,132,0.12); color: var(--group); }}
+    .cell-metric {{ font-family: var(--mono); font-size: 12px; color: var(--muted); }}
+    .cell-metric strong {{ display: block; font-size: 14px; color: var(--ink); }}
+    .cell-growth strong {{ color: var(--rise); }}
+    .mini-note {{ padding: 12px 18px 16px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); background: rgba(255,255,255,0.7); }}
+    .secondary {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 18px; margin-top: 20px; }}
+    .table-wrap {{ max-height: 420px; overflow: auto; }}
     table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
     th, td {{ padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }}
-    th {{ position: sticky; top: 0; background: #f7f0e7; z-index: 1; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }}
-    td.path {{ font-family: var(--mono); min-width: 260px; }}
-    .growth {{ font-weight: 700; color: var(--rise); }}
-    .badge {{ display: inline-block; margin-left: 8px; padding: 2px 7px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; background: var(--chip); color: var(--muted); }}
-    .badge.new {{ background: rgba(28,107,72,0.12); color: var(--new); }}
-    .badge.group {{ background: rgba(60,83,122,0.12); color: #314361; }}
-    .tree-toolbar {{ display: flex; gap: 8px; justify-content: flex-end; margin-bottom: 12px; }}
-    button {{ border: 1px solid var(--line); background: #fbf7f1; border-radius: 999px; padding: 8px 12px; cursor: pointer; font: inherit; }}
-    .tree {{ display: grid; gap: 10px; }}
-    details.node, .leaf {{ border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,0.72); }}
-    details.node[open] {{ background: rgba(255,255,255,0.94); }}
-    summary, .leaf-line {{ list-style: none; display: grid; grid-template-columns: minmax(260px, 1.3fr) repeat(3, minmax(110px, auto)) minmax(110px, auto); gap: 12px; align-items: center; padding: 12px 14px; cursor: pointer; }}
-    summary::-webkit-details-marker {{ display: none; }}
-    .node-name {{ font-weight: 700; }}
-    .node-path {{ display: block; font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 3px; word-break: break-all; }}
-    .metric {{ font-family: var(--mono); font-size: 12px; color: var(--muted); }}
-    .metric strong {{ display: block; color: var(--ink); font-size: 14px; }}
-    .children {{ display: grid; gap: 10px; padding: 0 12px 12px 18px; }}
-    .depth-1 {{ margin-left: 0; }}
-    .depth-2 {{ margin-left: 18px; }}
-    .depth-3 {{ margin-left: 36px; }}
-    .depth-4 {{ margin-left: 54px; }}
-    .depth-5 {{ margin-left: 72px; }}
-    .depth-6 {{ margin-left: 90px; }}
-    @media (max-width: 1100px) {{
-      .grid {{ grid-template-columns: 1fr; }}
-      summary, .leaf-line {{ grid-template-columns: 1fr 1fr; }}
+    th {{ position: sticky; top: 0; background: #f7f0e7; z-index: 1; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }}
+    td.path {{ font-family: var(--mono); min-width: 280px; }}
+    .growth-text {{ font-weight: 700; color: var(--rise); }}
+    @media (max-width: 1180px) {{
+      .tree-head, .tree-row {{ grid-template-columns: minmax(320px, 1.5fr) 130px 130px 130px 96px 96px; }}
+    }}
+    @media (max-width: 860px) {{
+      .tree-head, .tree-row {{ grid-template-columns: minmax(280px, 1.8fr) 120px 120px; }}
+      .tree-head > div:nth-child(n+4), .tree-row > div:nth-child(n+4) {{ display: none; }}
+      .secondary {{ grid-template-columns: 1fr; }}
     }}
   </style>
 </head>
@@ -497,57 +603,117 @@ def render_growth_html(report: GrowthReport, selection: ComparisonSelection) -> 
   <div class=\"page\">
     <section class=\"hero\">
       <h1>{html.escape(report.drive)} 全盘文件夹增长报告</h1>
-      <p>基于 WizTree 原始 CSV 比较文件夹当前分配大小与基线快照的差值。新增文件夹按当前分配大小记为增长量。</p>
+      <p>基于 WizTree 原始 CSV 比较文件夹当前分配大小与基线快照的差值。新增文件夹按当前分配大小记为增长量，树状视图会自动聚合同一路径分支。</p>
       <div class=\"meta\">
         <span>Baseline: {html.escape(selection.baseline.timestamp.isoformat(sep=' ', timespec='seconds'))} | {html.escape(str(selection.baseline.path))}</span>
         <span>Latest:   {html.escape(selection.latest.timestamp.isoformat(sep=' ', timespec='seconds'))} | {html.escape(str(selection.latest.path))}</span>
       </div>
     </section>
-    <section class=\"cards\">
-      <div class=\"card\"><span class=\"label\">Drive Growth</span><span class=\"value\">{format_bytes(report.root_growth_allocated, signed=True)}</span><span class=\"sub\">{format_gib(report.root_growth_allocated)} GiB</span></div>
-      <div class=\"card\"><span class=\"label\">Current Used</span><span class=\"value\">{format_bytes(report.latest_used_bytes)}</span><span class=\"sub\">{format_gib(report.latest_used_bytes)} GiB</span></div>
-      <div class=\"card\"><span class=\"label\">Growing Folders</span><span class=\"value\">{len(report.direct_growth_entries)}</span><span class=\"sub\">only folders with positive growth or newly created folders</span></div>
-      <div class=\"card\"><span class=\"label\">New Folders</span><span class=\"value\">{sum(1 for entry in report.direct_growth_entries if entry.is_new)}</span><span class=\"sub\">marked with NEW in the tree below</span></div>
+
+    <section class=\"stats\">
+      <div class=\"stat\"><span class=\"stat-label\">Drive Growth</span><span class=\"stat-value\">{format_bytes(report.root_growth_allocated, signed=True)}</span><span class=\"stat-sub\">{format_gib(report.root_growth_allocated)} GiB</span></div>
+      <div class=\"stat\"><span class=\"stat-label\">Current Used</span><span class=\"stat-value\">{format_bytes(report.latest_used_bytes)}</span><span class=\"stat-sub\">Baseline {format_bytes(report.baseline_used_bytes)}</span></div>
+      <div class=\"stat\"><span class=\"stat-label\">Growing Folders</span><span class=\"stat-value\">{len(report.direct_growth_entries):,}</span><span class=\"stat-sub\">positive growth or newly created folders</span></div>
+      <div class=\"stat\"><span class=\"stat-label\">New Folders</span><span class=\"stat-value\">{sum(1 for entry in report.direct_growth_entries if entry.is_new):,}</span><span class=\"stat-sub\">tagged as NEW in the tree</span></div>
     </section>
-    <section class=\"grid\">
+
+    <section class=\"panel tree-shell\">
+      <div class=\"panel-header\">
+        <div>
+          <h2>Tree Table</h2>
+          <p>按最大可见增长排序。`GROUP` 表示仅作为聚合分支显示，本身不是直接增长热点。</p>
+        </div>
+        <div class=\"toolbar\">
+          <button type=\"button\" onclick=\"setAllExpanded(true)\">Expand All</button>
+          <button type=\"button\" onclick=\"setAllExpanded(false)\">Collapse All</button>
+        </div>
+      </div>
+      <div class=\"tree-head\">
+        <div>Folder</div>
+        <div>Growth</div>
+        <div>Current</div>
+        <div>Baseline</div>
+        <div>Files</div>
+        <div>Folders</div>
+      </div>
+      <div class=\"tree-scroll\" id=\"tree-scroll\">{tree_rows_html}</div>
+      <div class=\"mini-note\">树视图默认展开到第 2 层。点击行首三角按钮可展开或收起某个分支。</div>
+    </section>
+
+    <section class=\"secondary\">
       <div class=\"panel\">
-        <h2>Flat Ranking</h2>
+        <div class=\"panel-header\"><div><h2>Flat Ranking</h2><p>按直接增长量排序的前 30 个文件夹。</p></div></div>
         <div class=\"table-wrap\">
           <table>
-            <thead>
-              <tr><th>Path</th><th>Growth</th><th>Current</th><th>Baseline</th></tr>
-            </thead>
+            <thead><tr><th>Path</th><th>Growth</th><th>Current</th><th>Baseline</th></tr></thead>
             <tbody>{top_rows_html}</tbody>
           </table>
         </div>
       </div>
       <div class=\"panel\">
-        <h2>New Folders</h2>
+        <div class=\"panel-header\"><div><h2>New Folders</h2><p>基线快照中不存在、在最新快照中出现的文件夹。</p></div></div>
         <div class=\"table-wrap\">
           <table>
-            <thead>
-              <tr><th>Path</th><th>Growth</th><th>Current</th><th>Baseline</th></tr>
-            </thead>
+            <thead><tr><th>Path</th><th>Growth</th><th>Current</th><th>Baseline</th></tr></thead>
             <tbody>{new_rows_html or '<tr><td colspan="4">No new folders in this range.</td></tr>'}</tbody>
           </table>
         </div>
       </div>
     </section>
-    <section class=\"panel\" style=\"margin-top: 20px;\">
-      <h2>Tree View</h2>
-      <div class=\"tree-toolbar\">
-        <button type=\"button\" onclick=\"setAllDetails(true)\">Expand All</button>
-        <button type=\"button\" onclick=\"setAllDetails(false)\">Collapse All</button>
-      </div>
-      <div class=\"tree\">{tree_html}</div>
-    </section>
   </div>
   <script>
-    function setAllDetails(openState) {{
-      document.querySelectorAll('details.node').forEach((element) => {{
-        element.open = openState;
+    const treeRows = Array.from(document.querySelectorAll('.tree-row[data-path]'));
+    const rowMap = new Map(treeRows.map((row) => [row.dataset.path, row]));
+
+    function updateTreeVisibility() {{
+      treeRows.forEach((row) => {{
+        const depth = Number(row.dataset.depth || '0');
+        let visible = true;
+        let parentPath = row.dataset.parent;
+        while (parentPath) {{
+          const parent = rowMap.get(parentPath);
+          if (!parent) {{
+            break;
+          }}
+          if (parent.dataset.expanded === 'false') {{
+            visible = false;
+            break;
+          }}
+          parentPath = parent.dataset.parent;
+        }}
+        row.classList.toggle('hidden', !visible && depth > 0);
+        const toggle = row.querySelector('.row-toggle[data-action="toggle"]');
+        if (toggle) {{
+          const expanded = row.dataset.expanded !== 'false';
+          toggle.textContent = expanded ? '▾' : '▸';
+          toggle.setAttribute('aria-expanded', String(expanded));
+        }}
       }});
     }}
+
+    function togglePath(path) {{
+      const row = rowMap.get(path);
+      if (!row || row.dataset.hasChildren !== 'true') {{
+        return;
+      }}
+      row.dataset.expanded = row.dataset.expanded === 'false' ? 'true' : 'false';
+      updateTreeVisibility();
+    }}
+
+    function setAllExpanded(expanded) {{
+      treeRows.forEach((row) => {{
+        if (row.dataset.hasChildren === 'true' && row.dataset.depth !== '0') {{
+          row.dataset.expanded = expanded ? 'true' : 'false';
+        }}
+      }});
+      const rootRow = treeRows.find((row) => row.dataset.depth === '0');
+      if (rootRow) {{
+        rootRow.dataset.expanded = 'true';
+      }}
+      updateTreeVisibility();
+    }}
+
+    updateTreeVisibility();
   </script>
 </body>
 </html>
@@ -561,42 +727,66 @@ def render_flat_table_row(entry: FolderGrowth) -> str:
     return (
         "<tr>"
         f"<td class=\"path\">{html.escape(entry.path)}{''.join(badges)}</td>"
-        f"<td class=\"growth\">{html.escape(format_bytes(entry.growth_allocated, signed=True))}</td>"
+        f"<td class=\"growth-text\">{html.escape(format_bytes(entry.growth_allocated, signed=True))}</td>"
         f"<td>{html.escape(format_bytes(entry.current_allocated))}</td>"
         f"<td>{html.escape(format_bytes(entry.baseline_allocated))}</td>"
         "</tr>"
     )
 
 
-def render_tree_node(node: GrowthTreeNode) -> str:
+def render_tree_table_rows(root_node: GrowthTreeNode) -> str:
+    parts: list[str] = []
+
+    def walk(node: GrowthTreeNode, parent_path: str, ancestors_visible: bool) -> None:
+        expanded = True if node.depth == 0 else node.depth <= 2
+        parts.append(render_tree_table_row(node, parent_path, expanded, ancestors_visible))
+        child_visible = ancestors_visible and expanded
+        for child in node.children:
+            walk(child, node.path, child_visible)
+
+    walk(root_node, "", True)
+    return "".join(parts)
+
+
+def render_tree_table_row(node: GrowthTreeNode, parent_path: str, expanded: bool, visible: bool) -> str:
     badges = []
+    row_classes = ["tree-row"]
+    if node.depth == 0:
+        row_classes.append("root")
     if node.is_new:
+        row_classes.append("new-row")
         badges.append('<span class="badge new">NEW</span>')
     if node.is_ancestor_only:
+        row_classes.append("group-row")
         badges.append('<span class="badge group">GROUP</span>')
+    if not visible and node.depth > 0:
+        row_classes.append("hidden")
 
-    line = (
-        f"<div class=\"node-name\">{html.escape(node.name)}{''.join(badges)}"
-        f"<span class=\"node-path\">{html.escape(node.path)}</span></div>"
-        f"<div class=\"metric growth\"><strong>{html.escape(format_bytes(node.growth_allocated, signed=True))}</strong>Growth</div>"
-        f"<div class=\"metric\"><strong>{html.escape(format_bytes(node.current_allocated))}</strong>Current</div>"
-        f"<div class=\"metric\"><strong>{html.escape(format_bytes(node.baseline_allocated))}</strong>Baseline</div>"
-        f"<div class=\"metric\"><strong>{node.files:,} files</strong>{node.folders:,} folders</div>"
-    )
-
-    css_depth = min(node.depth, 6)
     if node.children:
-        children = "".join(render_tree_node(child) for child in node.children)
-        open_attr = " open" if node.depth <= 2 else ""
-        return (
-            f"<details class=\"node depth-{css_depth}\"{open_attr}>"
-            f"<summary>{line}</summary>"
-            f"<div class=\"children\">{children}</div>"
-            "</details>"
+        toggle = (
+            f'<button class="row-toggle" type="button" data-action="toggle" '
+            f'data-path="{html.escape(node.path)}" onclick="togglePath(this.dataset.path)" '
+            f'aria-expanded="{str(expanded).lower()}">{"▾" if expanded else "▸"}</button>'
         )
+    else:
+        toggle = '<span class="row-toggle-spacer"></span>'
 
-    return f"<div class=\"leaf depth-{css_depth}\"><div class=\"leaf-line\">{line}</div></div>"
-
+    files_text = f"{node.files:,}" if node.files else "-"
+    folders_text = f"{node.folders:,}" if node.folders else "-"
+    return (
+        f'<div class="{" ".join(row_classes)}" data-path="{html.escape(node.path)}" '
+        f'data-parent="{html.escape(parent_path)}" data-depth="{node.depth}" '
+        f'data-expanded="{str(expanded).lower()}" data-has-children="{str(bool(node.children)).lower()}" '
+        f'style="--depth:{node.depth};">'
+        f'<div class="path-cell">{toggle}<div class="name-block"><span class="name-text">{html.escape(node.name)}</span>{"".join(badges)}'
+        f'<span class="full-path">{html.escape(node.path)}</span></div></div>'
+        f'<div class="cell-metric cell-growth"><strong>{html.escape(format_bytes(node.growth_allocated, signed=True))}</strong></div>'
+        f'<div class="cell-metric"><strong>{html.escape(format_bytes(node.current_allocated))}</strong></div>'
+        f'<div class="cell-metric"><strong>{html.escape(format_bytes(node.baseline_allocated))}</strong></div>'
+        f'<div class="cell-metric"><strong>{files_text}</strong></div>'
+        f'<div class="cell-metric"><strong>{folders_text}</strong></div>'
+        '</div>'
+    )
 
 def format_bytes(value: int, signed: bool = False) -> str:
     negative = value < 0
@@ -635,5 +825,6 @@ def folder_name(path: str) -> str:
 
 def is_drive_root_path(path: str) -> bool:
     return len(path) == 3 and path[1:] == ":\\"
+
 
 
